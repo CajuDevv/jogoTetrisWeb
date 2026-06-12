@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Tetris</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;900&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d14;
+    --bg2: #16161f;
+    --bg3: #1e1e2a;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0eaf5;
+    --text2: rgba(240,234,245,0.55);
+    --text3: rgba(240,234,245,0.3);
+    --accent: #7c6af7;
+    --radius: 12px;
+    --radius-lg: 18px;
+    --font: 'Nunito', sans-serif;
+    --font-display: 'Playfair Display', serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    overflow-x: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--text);
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--accent); }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pause-btn {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text2);
+    font-size: 13px;
+    font-family: var(--font);
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .pause-btn:hover { background: rgba(255,255,255,0.07); }
+
+  /* ── Phase ribbon ── */
+  .phase-ribbon {
+    width: 100%;
+    display: flex;
+    height: 3px;
+  }
+  .phase-ribbon-seg {
+    flex: 1;
+    height: 3px;
+    opacity: 0.2;
+    transition: opacity 0.5s;
+  }
+  .phase-ribbon-seg.active { opacity: 0.8; }
+  .phase-ribbon-seg.done   { opacity: 1; }
+
+  /* ── Layout wrapper ── */
+  .game-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    padding: 16px 12px 20px;
+    gap: 14px;
+    max-width: 480px;
+  }
+
+  /* ── Top HUD bar ── */
+  .hud-bar {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+  .hud-card {
+    flex: 1;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .hud-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 2px;
+  }
+  .hud-value {
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--text);
+    line-height: 1;
+  }
+  .hud-sub {
+    font-size: 10px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  /* ── Progress bar ── */
+  .progress-wrap {
+    width: 100%;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .progress-label { font-size: 11px; color: var(--text2); white-space: nowrap; }
+  .progress-track {
+    flex: 1;
+    background: var(--bg3);
+    border-radius: 99px;
+    height: 7px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width .3s, background .6s;
+    width: 0%;
+  }
+  .progress-pts {
+    font-size: 11px;
+    color: var(--text2);
+    white-space: nowrap;
+    font-weight: 700;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  /* ── Board row (canvas + next piece) ── */
+  .board-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    width: 100%;
+  }
+  .board-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+  #board {
+    display: block;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    background: #0a0a10;
+  }
+  .board-glow {
+    position: absolute;
+    inset: -2px;
+    border-radius: calc(var(--radius-lg) + 2px);
+    pointer-events: none;
+    transition: box-shadow .8s;
+  }
+
+  /* ── Side panel (next + phases) ── */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+  .side-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+  .side-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+  #next-canvas { display: block; margin: 0 auto; }
+
+  .phase-list { display: flex; flex-direction: column; gap: 0; }
+  .phase-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 11px;
+    color: var(--text3);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: color .4s;
+  }
+  .phase-row:last-child { border-bottom: none; }
+  .phase-row.current { color: var(--text); font-weight: 700; }
+  .phase-row.done { color: var(--text2); }
+  .phase-dot-sm {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    opacity: .25;
+    transition: opacity .4s;
+  }
+  .phase-row.current .phase-dot-sm,
+  .phase-row.done .phase-dot-sm { opacity: 1; }
+  .phase-chk { margin-left: auto; font-size: 10px; color: var(--text3); }
+
+  /* ── Overlay ── */
+  #overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-lg);
+    background: rgba(10,10,16,0.85);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    transition: opacity .3s;
+  }
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+  .overlay-card {
+    background: var(--bg2);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: var(--radius-lg);
+    padding: 26px 22px;
+    text-align: center;
+    max-width: 230px;
+    width: 90%;
+  }
+  .overlay-icon { font-size: 32px; margin-bottom: 8px; }
+  .overlay-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--text);
+    margin-bottom: 8px;
+    line-height: 1.25;
+  }
+  .overlay-sub {
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.7;
+    margin-bottom: 18px;
+  }
+  .btn-primary {
+    display: inline-block;
+    padding: 10px 22px;
+    border-radius: 99px;
+    border: none;
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+    transition: transform .15s, opacity .15s;
+  }
+  .btn-primary:hover { opacity: .88; transform: scale(1.03); }
+  .btn-primary:active { transform: scale(.97); }
+  .val-card { border-color: rgba(226,75,74,.35) !important; }
+  .val-card .overlay-title { color: #E24B4A !important; }
+  .val-hearts {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+  }
+  .heart-particle {
+    position: absolute;
+    animation: floatHeart 3s ease-in forwards;
+    opacity: 0;
+  }
+  @keyframes floatHeart {
+    0%   { transform: translateY(0) scale(1);   opacity: 1; }
+    100% { transform: translateY(-320px) scale(.3); opacity: 0; }
+  }
+
+  /* ── Controls (always visible) ── */
+  .controls-area {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ctrl-row-btns {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+  .ctrl-btn {
+    flex: 1;
+    max-width: 90px;
+    height: 56px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .1s, transform .08s;
+    touch-action: manipulation;
+  }
+  .ctrl-btn:active { background: var(--bg3); transform: scale(.93); }
+  .ctrl-btn-wide {
+    max-width: 200px;
+    font-size: 14px;
+    font-weight: 700;
+    gap: 6px;
+    color: var(--text2);
+    flex: 2;
+    height: 52px;
+  }
+  .ctrl-btn-drop {
+    background: rgba(124,106,247,.12);
+    border-color: rgba(124,106,247,.3);
+    color: var(--accent);
+    font-size: 22px;
+  }
+
+  /* keyboard hint — desktop only */
+  .kb-hints {
+    display: none;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .kb-hints { display: flex; }
+  }
+  .kb-hint { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 4px; }
+  .key {
+    background: var(--bg3);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-family: monospace;
+    color: var(--text);
+  }
+
+  /* bg particles */
+  .bg-particle {
+    position: fixed;
+    pointer-events: none;
+    opacity: 0.035;
+    animation: drift linear infinite;
+  }
+  @keyframes drift {
+    from { transform: translateY(100vh) rotate(0deg); }
+    to   { transform: translateY(-120px) rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-particle" style="left:8%;font-size:22px;animation-duration:18s;animation-delay:-3s">◆</div>
+<div class="bg-particle" style="left:25%;font-size:14px;animation-duration:22s;animation-delay:-9s">◆</div>
+<div class="bg-particle" style="left:65%;font-size:20px;animation-duration:16s;animation-delay:-1s">◆</div>
+<div class="bg-particle" style="left:82%;font-size:16px;animation-duration:21s;animation-delay:-7s">◆</div>
+
+<header>
+  <div class="logo">Tetris <span>&#9632;</span></div>
+  <div class="header-right">
+    <button class="pause-btn" onclick="togglePause()" id="pause-btn">⏸ Pausar</button>
+  </div>
+</header>
+
+<div class="phase-ribbon" id="phase-ribbon"></div>
+
+<div class="game-wrapper">
+
+  <!-- HUD -->
+  <div class="hud-bar">
+    <div class="hud-card">
+      <div class="hud-label">Pontos</div>
+      <div class="hud-value" id="score-val">0</div>
+    </div>
+    <div class="hud-card">
+      <div class="hud-label">Fase</div>
+      <div class="hud-value" id="phase-val">1</div>
+      <div class="hud-sub" id="phase-name-val">—</div>
+    </div>
+    <div class="hud-card">
+      <div class="hud-label">Linhas</div>
+      <div class="hud-value" id="lines-val">0</div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap">
+    <div class="progress-label">Meta</div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="progress-pts" id="progress-pts">0 / 300</div>
+  </div>
+
+  <!-- Board + side -->
+  <div class="board-row">
+    <div class="board-wrap">
+      <div class="board-glow" id="board-glow"></div>
+      <canvas id="board" width="220" height="440"></canvas>
+      <div id="overlay">
+        <div id="overlay-card" class="overlay-card">
+          <div id="overlay-icon" class="overlay-icon">🎮</div>
+          <div id="overlay-title" class="overlay-title">Tetris</div>
+          <div id="overlay-sub" class="overlay-sub">Complete fases coloridas para avançar. Do mais frio ao mais quente — e então a surpresa!</div>
+          <button class="btn-primary" id="overlay-btn" onclick="overlayAction()">Jogar</button>
+        </div>
+        <div class="val-hearts" id="val-hearts"></div>
+      </div>
+    </div>
+
+    <div class="side-panel">
+      <div class="side-card" style="text-align:center">
+        <div class="side-label">Próxima</div>
+        <canvas id="next-canvas" width="72" height="72"></canvas>
+      </div>
+      <div class="side-card">
+        <div class="side-label">Fases</div>
+        <div class="phase-list" id="phases-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-area">
+    <div class="ctrl-row-btns">
+      <button class="ctrl-btn" ontouchstart="mLeft()" onclick="mLeft()">◀</button>
+      <button class="ctrl-btn ctrl-btn-drop" ontouchstart="mDrop()" onclick="mDrop()">⬇</button>
+      <button class="ctrl-btn" ontouchstart="mRight()" onclick="mRight()">▶</button>
+    </div>
+    <div class="ctrl-row-btns">
+      <button class="ctrl-btn ctrl-btn-wide" ontouchstart="mRotate()" onclick="mRotate()">↻ Girar</button>
+      <button class="ctrl-btn ctrl-btn-wide" ontouchstart="mHardDrop()" onclick="mHardDrop()">⬇⬇ Drop</button>
+    </div>
+    <div class="kb-hints">
+      <div class="kb-hint"><span class="key">←</span><span class="key">→</span> mover</div>
+      <div class="kb-hint"><span class="key">↑</span> girar</div>
+      <div class="kb-hint"><span class="key">↓</span> descer</div>
+      <div class="kb-hint"><span class="key">espaço</span> drop</div>
+      <div class="kb-hint"><span class="key">P</span> pausar</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const COLS = 11, ROWS = 22, CELL = 20;
+const canvas  = document.getElementById('board');
+const ctx     = canvas.getContext('2d');
+const ncanvas = document.getElementById('next-canvas');
+const nctx    = ncanvas.getContext('2d');
+
+const PHASES = [
+  { name: 'Azul',     color: '#378ADD', light: '#B5D4F4', glow: '#378ADD40', goal: 100 },
+  { name: 'Ciano',    color: '#1D9E75', light: '#9FE1CB', glow: '#1D9E7540', goal: 200 },
+  { name: 'Verde',    color: '#60A812', light: '#C0DD97', glow: '#60A81240', goal: 300 },
+  { name: 'Amarelo',  color: '#C8821A', light: '#FAC775', glow: '#C8821A40', goal: 400 },
+  { name: 'Laranja',  color: '#D85A30', light: '#F5C4B3', glow: '#D85A3040', goal: 500 },
+  { name: 'Rosa',     color: '#D4537E', light: '#F4C0D1', glow: '#D4537E40', goal: 600 },
+  { name: 'Vermelho', color: '#E24B4A', light: '#F7C1C1', glow: '#E24B4A40', goal: 700 },
+];
+
+const SHAPES = [
+  [[1,1,1,1]],
+  [[1,1],[1,1]],
+  [[0,1,0],[1,1,1]],
+  [[1,0,0],[1,1,1]],
+  [[0,0,1],[1,1,1]],
+  [[1,1,0],[0,1,1]],
+  [[0,1,1],[1,1,0]],
+];
+
+let board, piece, next, score, lines, phase, running, paused, loopId, lastTime;
+
+function initBoard() { board = Array.from({length: ROWS}, () => Array(COLS).fill(0)); }
+function randShape() { return SHAPES[Math.floor(Math.random()*SHAPES.length)].map(r=>[...r]); }
+function spawnPiece(shape) { return { shape, x: Math.floor(COLS/2)-Math.floor(shape[0].length/2), y: 0 }; }
+function rotate(shape) { return shape[0].map((_,i)=>shape.map(r=>r[i]).reverse()); }
+
+function collide(p, dx=0, dy=0, sh=null) {
+  const s = sh || p.shape;
+  for (let r=0;r<s.length;r++)
+    for (let c=0;c<s[r].length;c++)
+      if (s[r][c]) {
+        const nx=p.x+c+dx, ny=p.y+r+dy;
+        if (nx<0||nx>=COLS||ny>=ROWS) return true;
+        if (ny>=0 && board[ny][nx]) return true;
+      }
+  return false;
+}
+
+function place() {
+  for (let r=0;r<piece.shape.length;r++)
+    for (let c=0;c<piece.shape[r].length;c++)
+      if (piece.shape[r][c] && piece.y+r>=0)
+        board[piece.y+r][piece.x+c] = phase+1;
+}
+
+function clearLines() {
+  let n=0;
+  for (let r=ROWS-1;r>=0;r--) {
+    if (board[r].every(v=>v)) { board.splice(r,1); board.unshift(Array(COLS).fill(0)); n++; r++; }
+  }
+  return n;
+}
+
+function lineScore(n) { return [0,100,300,600,1000][n]||n*400; }
+function getColor(pi) { return PHASES[pi-1]?.color||'#888'; }
+
+function drawCell(c, x, y, color, alpha=1, sz=CELL) {
+  c.save();
+  c.globalAlpha = alpha;
+  c.fillStyle = color;
+  c.beginPath();
+  c.roundRect(x*sz+1.5, y*sz+1.5, sz-3, sz-3, 3);
+  c.fill();
+  c.globalAlpha = alpha*.22;
+  c.strokeStyle='#fff'; c.lineWidth=.8; c.stroke();
+  c.restore();
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle='rgba(255,255,255,0.03)'; ctx.lineWidth=.5;
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) ctx.strokeRect(c*CELL,r*CELL,CELL,CELL);
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) if (board[r][c]) drawCell(ctx,c,r,getColor(board[r][c]));
+  if (piece) {
+    const ph=PHASES[phase];
+    let ghost={...piece};
+    while(!collide(ghost,0,1)) ghost.y++;
+    for (let r=0;r<piece.shape.length;r++) for (let c=0;c<piece.shape[r].length;c++)
+      if (piece.shape[r][c]) drawCell(ctx,piece.x+c,ghost.y+r,ph.color,.15);
+    for (let r=0;r<piece.shape.length;r++) for (let c=0;c<piece.shape[r].length;c++)
+      if (piece.shape[r][c]) drawCell(ctx,piece.x+c,piece.y+r,ph.color);
+  }
+}
+
+function drawNext() {
+  nctx.clearRect(0,0,72,72);
+  if (!next) return;
+  const ph=PHASES[phase];
+  const ox=Math.floor((4-next.shape[0].length)/2);
+  const oy=Math.floor((4-next.shape.length)/2);
+  for (let r=0;r<next.shape.length;r++) for (let c=0;c<next.shape[r].length;c++)
+    if (next.shape[r][c]) drawCell(nctx,ox+c,oy+r,ph.color,1,16);
+}
+
+function updateHUD() {
+  document.getElementById('score-val').textContent = score;
+  document.getElementById('phase-val').textContent = phase+1;
+  document.getElementById('phase-name-val').textContent = PHASES[phase].name;
+  document.getElementById('lines-val').textContent = lines;
+  const ph=PHASES[phase];
+  const pct=Math.min(score/ph.goal*100,100);
+  const fill=document.getElementById('progress-fill');
+  fill.style.width=pct+'%';
+  fill.style.background=ph.color;
+  document.getElementById('progress-pts').textContent = score+' / '+ph.goal;
+  document.getElementById('board-glow').style.boxShadow = `0 0 36px 6px ${ph.glow}, 0 0 70px 12px ${ph.glow}55`;
+  document.querySelectorAll('.phase-ribbon-seg').forEach((s,i)=>{
+    s.classList.remove('active','done');
+    if (i<phase) s.classList.add('done');
+    else if (i===phase) s.classList.add('active');
+  });
+  document.querySelectorAll('.phase-row').forEach((el,i)=>{
+    el.classList.remove('current','done');
+    if (i===phase) el.classList.add('current');
+    else if (i<phase) el.classList.add('done');
+    const chk=el.querySelector('.phase-chk');
+    if (chk) chk.textContent = i<phase?'✓':'';
+  });
+}
+
+function showOverlay(icon, title, sub, btnTxt, action, valStyle=false) {
+  running=false;
+  const card=document.getElementById('overlay-card');
+  card.className = 'overlay-card' + (valStyle?' val-card':'');
+  document.getElementById('overlay-icon').innerHTML=icon;
+  document.getElementById('overlay-title').textContent=title;
+  document.getElementById('overlay-sub').innerHTML=sub;
+  document.getElementById('overlay-btn').textContent=btnTxt;
+  document.getElementById('val-hearts').innerHTML='';
+  const btn=document.getElementById('overlay-btn');
+  btn.style.background = valStyle ? '#E24B4A' : 'var(--accent)';
+  window._overlayAction=action;
+  document.getElementById('overlay').classList.remove('hidden');
+}
+
+function overlayAction() {
+  document.getElementById('overlay').classList.add('hidden');
+  if (window._overlayAction) window._overlayAction();
+}
+
+function showValentines() {
+  running=false;
+  const card=document.getElementById('overlay-card');
+  card.className='overlay-card val-card';
+  document.getElementById('overlay-icon').innerHTML='❤️';
+  document.getElementById('overlay-title').textContent='Feliz Dia dos Namorados!';
+  document.getElementById('overlay-sub').innerHTML=
+    'Só queria te mandar isso, eu foquei bastante no meu TCC hoje e fiz outras coisas, mas não quer dizer que não tenha pensado em você. Não somos namorados, óbvio, mas queria te enviar algo então aceite, pode me julgar...<br><br>'
+  document.getElementById('overlay-btn').textContent='Jogar novamente';
+  document.getElementById('overlay-btn').style.background='#E24B4A';
+  window._overlayAction=()=>restartAll();
+  document.getElementById('overlay').classList.remove('hidden');
+  const hd=document.getElementById('val-hearts');
+  hd.innerHTML='';
+  const emojis=['❤️','💕','💖','💗','💓','🌹','💋'];
+  for (let i=0;i<24;i++) {
+    const h=document.createElement('div');
+    h.className='heart-particle';
+    h.textContent=emojis[Math.floor(Math.random()*emojis.length)];
+    h.style.cssText=`left:${Math.random()*90+5}%;bottom:-10px;font-size:${12+Math.random()*16}px;animation-delay:${Math.random()*2.5}s;animation-duration:${2+Math.random()*2}s`;
+    hd.appendChild(h);
+  }
+}
+
+// ── single loop token — only ONE rAF chain allowed at a time ──
+let loopToken = 0; // increment to invalidate any running loop
+
+function startPhase(p) {
+  // kill any running loop before touching state
+  loopToken++;
+  cancelAnimationFrame(loopId);
+
+  phase = p; score = 0; lines = 0;
+  initBoard();
+  piece = null;
+  next  = spawnPiece(randShape());
+  spawnNext();          // sets piece, spawns next next
+  running = true;
+  paused  = false;
+  lastTime = 0;
+  updateHUD();
+  document.getElementById('pause-btn').textContent = '⏸ Pausar';
+
+  const myToken = loopToken;
+  loopId = requestAnimationFrame(function tick(ts) {
+    if (myToken !== loopToken) return; // stale loop — die silently
+    if (!running || paused) return;
+    loopId = requestAnimationFrame(tick);
+    if (ts - lastTime < getDelay()) { draw(); return; }
+    lastTime = ts;
+
+    if (!collide(piece, 0, 1)) {
+      piece.y++;
+    } else {
+      place();
+      const cl = clearLines();
+      if (cl) { score += lineScore(cl); lines += cl; }
+      updateHUD();
+
+      if (score >= PHASES[phase].goal) {
+        running = false;
+        const np = phase + 1;
+        if (np >= PHASES.length) {
+          setTimeout(showValentines, 500);
+        } else {
+          showOverlay('🎉', 'Fase ' + (phase+1) + ' completa!',
+            'Você zerou a fase <strong>' + PHASES[phase].name + '</strong>!<br>Próxima: <strong>' + PHASES[np].name + '</strong>',
+            'Próxima fase →', () => startPhase(np));
+        }
+        return;
+      }
+      spawnNext();
+      if (!running) return; // game over was triggered inside spawnNext
+    }
+    draw();
+  });
+}
+
+function spawnNext() {
+  piece = next;
+  next  = spawnPiece(randShape());
+  if (collide(piece)) {
+    running = false;
+    showOverlay('😢', 'Game Over', 'O tabuleiro encheu!<br>Tente novamente nesta fase.', 'Tentar de novo', () => startPhase(phase));
+    return;
+  }
+  drawNext();
+}
+
+function getDelay() { return Math.max(90, 560 - phase * 60); }
+
+function restartAll() {
+  startPhase(0);
+}
+
+function togglePause() {
+  if (!running && !paused) return;
+  paused = !paused;
+  document.getElementById('pause-btn').textContent = paused ? '▶ Continuar' : '⏸ Pausar';
+  if (!paused) {
+    // resume: restart the loop under the current token
+    const myToken = loopToken;
+    loopId = requestAnimationFrame(function tick(ts) {
+      if (myToken !== loopToken) return;
+      if (!running || paused) return;
+      loopId = requestAnimationFrame(tick);
+      if (ts - lastTime < getDelay()) { draw(); return; }
+      lastTime = ts;
+      if (!collide(piece, 0, 1)) {
+        piece.y++;
+      } else {
+        place();
+        const cl = clearLines();
+        if (cl) { score += lineScore(cl); lines += cl; }
+        updateHUD();
+        if (score >= PHASES[phase].goal) {
+          running = false;
+          const np = phase + 1;
+          if (np >= PHASES.length) { setTimeout(showValentines, 500); }
+          else showOverlay('🎉', 'Fase '+(phase+1)+' completa!',
+            'Você zerou a fase <strong>'+PHASES[phase].name+'</strong>!<br>Próxima: <strong>'+PHASES[np].name+'</strong>',
+            'Próxima fase →', ()=>startPhase(np));
+          return;
+        }
+        spawnNext();
+        if (!running) return;
+      }
+      draw();
+    });
+  }
+}
+
+// keyboard
+document.addEventListener('keydown', e => {
+  if (e.key==='p'||e.key==='P') { togglePause(); return; }
+  if (!running||paused) return;
+  if      (e.key==='ArrowLeft')  { if (!collide(piece,-1,0)) piece.x--; }
+  else if (e.key==='ArrowRight') { if (!collide(piece, 1,0)) piece.x++; }
+  else if (e.key==='ArrowDown')  { if (!collide(piece,0, 1)) piece.y++; }
+  else if (e.key==='ArrowUp')    { const r=rotate(piece.shape); if(!collide(piece,0,0,r)) piece.shape=r; }
+  else if (e.key===' ')          { e.preventDefault(); while(!collide(piece,0,1)) piece.y++; }
+  draw();
+});
+
+// mobile button handlers
+function mLeft()     { if (!running||paused) return; if (!collide(piece,-1,0)) piece.x--; draw(); }
+function mRight()    { if (!running||paused) return; if (!collide(piece, 1,0)) piece.x++; draw(); }
+function mDrop()     { if (!running||paused) return; if (!collide(piece,0,1)) piece.y++; draw(); }
+function mHardDrop() { if (!running||paused) return; while(!collide(piece,0,1)) piece.y++; draw(); }
+function mRotate()   { if (!running||paused) return; const r=rotate(piece.shape); if(!collide(piece,0,0,r)) piece.shape=r; draw(); }
+
+// prevent scroll on touch controls
+document.querySelectorAll('.ctrl-btn').forEach(btn => {
+  btn.addEventListener('touchstart', e => e.preventDefault(), {passive:false});
+});
+
+// build ribbon + phase list
+function buildUI() {
+  const ribbon=document.getElementById('phase-ribbon');
+  ribbon.innerHTML='';
+  const list=document.getElementById('phases-list');
+  list.innerHTML='';
+  PHASES.forEach((p,i)=>{
+    const seg=document.createElement('div');
+    seg.className='phase-ribbon-seg';
+    seg.style.background=p.color;
+    ribbon.appendChild(seg);
+    const row=document.createElement('div');
+    row.className='phase-row';
+    row.innerHTML=`<div class="phase-dot-sm" style="background:${p.color}"></div><span>${p.name}</span><span class="phase-chk"></span>`;
+    list.appendChild(row);
+  });
+}
+
+buildUI();
+showOverlay('🎮','Tetris','Complete cada fase colorida para avançar de nível. Faça pontos limpando linhas!','Começar', ()=>{
+  startPhase(0);
+});
+</script>
+</body>
+</html>
